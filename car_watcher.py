@@ -1,16 +1,29 @@
 import requests
 import xml.etree.ElementTree as ET #for parsing xml
 import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+
+def send_email(sender, receiver, subject, body, server):
+  msg = MIMEMultipart()
+  msg["Subject"] = subject
+  msg["To"]      = receiver
+  msg["From"]    = sender
+  msg.attach(MIMEText(body))
+  server.sendmail(sender, [receiver], msg.as_string())
+
 
 #Format xml elements that use a given namespace 
 def namespace_format(name, attribute, ns):
    return "{" + ns[name] + "}" + attribute
 
 #Search for cars on craiglist and email if new ones appear
-def watch_cars(search_params, location):
+def watch_cars(search_params, location, sender, receiver, email_server):
    
    #Determine if a new item fitting the given 
-   r = requests.post("http://sandiego.craigslist.org/search/sss", params=search_params)
+   r = requests.post("http://"+location+".craigslist.org/search/sss", params=search_params)
    response = r.text
    root = ET.fromstring(response.encode('utf-8')) #turn xml into an element tree
    
@@ -31,19 +44,28 @@ def watch_cars(search_params, location):
    #New cars are only those not already saved 
    new_cars = list(set(result_cars) - set(saved_cars))
    
+   final_urls = []
    #Save new cars to file 
    for url in new_cars:
-       car_file.write(url+'\n')
-   
+       final_urls.append(url+'\n')
+       car_file.write(final_urls[-1])
+
    #Alert when new matches are found
    if not len(new_cars) == 0: #alert new matching cars
-      print "new cars"
-      print new_cars
-   
+      subject  = "Found new matching cars on Craigslist"
+      body     = "".join(final_urls)
+      send_email(sender, receiver, subject, body, email_server) 
+      print subject
    car_file.close()
 
 
-   
+sender = 'smtp.gmail.com:587'
+receiver = 'ethandeson@gmail.com'
+email_server = smtplib.SMTP(sender)
+email_server.ehlo()
+email_server.starttls()
+email_server.login("etha.util.mail", "^^util^^")
+
 search_params = { "format":"rss", 
                   "sort":"date", 
                   "auto_make_model":"toyota",
@@ -57,5 +79,5 @@ search_params = { "format":"rss",
                   "search_distance":"20" 
                 }
 location = "sandiego"
-
-watch_cars(search_params, location)
+#Watch for cars on Craiglist matching the given search_params
+watch_cars(search_params, location, sender, receiver, email_server)
